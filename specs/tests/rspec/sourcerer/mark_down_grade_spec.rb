@@ -8,7 +8,7 @@ RSpec.describe Sourcerer::MarkDownGrade do
   before do
     described_class.bootstrap!(
       preserve_heading_ids: true, strip_internal_links: false,
-      convert_tables_to_markdown: false)
+      convert_tables_to_markdown: false, convert_dls_to_markdown: true)
   end
 
   describe '.convert_html' do
@@ -37,10 +37,57 @@ RSpec.describe Sourcerer::MarkDownGrade do
       expect(markdown).to include('## Introduction')
     end
 
-    it 'preserves semantic definition list tags' do
+    it 'converts definition lists to markdown by default' do
       html = '<dl><dt class="hdlist1">Term</dt><dd><p>Description</p></dd></dl>'
       markdown = convert_html_fragment(html)
-      expect(markdown).to include('<dl>', '<dt class="hdlist1">Term</dt>', '<dd>', 'Description')
+      expect(markdown).to include('*Term:*')
+      expect(markdown).to include('   Description')
+      expect(markdown).not_to include('<dl>')
+    end
+
+    it 'preserves definition list as HTML with .no-markdown class' do
+      html = '<dl class="no-markdown"><dt class="hdlist1">Term</dt><dd><p>Description</p></dd></dl>'
+      markdown = convert_html_fragment(html)
+      expect(markdown).to include('<dl')
+      expect(markdown).not_to include('*Term:*')
+    end
+
+    it 'converts definition lists with to-markdown class', :aggregate_failures do
+      html = '<dl class="to-markdown"><dt class="hdlist1">Term</dt><dd><p>Description</p></dd></dl>'
+      markdown = convert_html_fragment(html)
+      expect(markdown).to include('*Term:*')
+      expect(markdown).to include('   Description')
+      expect(markdown).not_to include('<dl>')
+      expect(markdown).not_to include('<dt')
+      expect(markdown).not_to include('<dd>')
+    end
+
+    it 'converts definition list when to-markdown is on the parent div wrapper (AsciiDoc html5)' do
+      html = '<div class="dlist to-markdown"><dl><dt class="hdlist1">Term</dt><dd><p>Description</p></dd></dl></div>'
+      markdown = convert_html_fragment(html)
+      expect(markdown).to include('*Term:*')
+      expect(markdown).to include('   Description')
+      expect(markdown).not_to include('<dl>')
+    end
+
+    it 'properly indents definition list descriptions with to-markdown class' do
+      html = '<dl class="to-markdown"><dt>First</dt><dd>First description</dd><dt>Second</dt><dd>2nd desc</dd></dl>'
+      markdown = convert_html_fragment(html)
+      expect(markdown).to include('*First:*')
+      expect(markdown).to include('   First description')
+      expect(markdown).to include('*Second:*')
+      expect(markdown).to include('   2nd desc')
+    end
+
+    it 'converts definition list with .to-markdown and checklist dd content' do
+      html = '<dl class="to-markdown"><dt class="hdlist1">Readiness</dt><dd>' \
+             '<ul><li><input type="checkbox" disabled> Task 1</li>' \
+             '<li><input type="checkbox" disabled> Task 2</li></ul></dd></dl>'
+      markdown = convert_html_fragment(html)
+      expect(markdown).to include('*Readiness:*')
+      expect(markdown).to include('   - [ ] Task 1')
+      expect(markdown).to include('   - [ ] Task 2')
+      expect(markdown).not_to include('<dl>')
     end
 
     it 'preserves toc internal links as markdown anchors by default' do
@@ -64,6 +111,27 @@ RSpec.describe Sourcerer::MarkDownGrade do
       html = '<p><em class="role">term</em> and <code role="literal">x</code></p>'
       markdown = convert_html_fragment(html)
       expect(markdown).to include('<em class="role">term</em>', '<code role="literal">x</code>')
+    end
+
+    it 'converts unchecked checkboxes in list items to markdown format' do
+      html = '<ul><li><input class="task-list-item-checkbox" type="checkbox" disabled>Task item</li></ul>'
+      markdown = convert_html_fragment(html)
+      expect(markdown).to include('- [ ] Task item')
+      expect(markdown).not_to include('<input')
+    end
+
+    it 'converts checked checkboxes in list items to markdown format' do
+      html = '<ul><li><input class="task-list-item-checkbox" type="checkbox" disabled checked>Completed task</li></ul>'
+      markdown = convert_html_fragment(html)
+      expect(markdown).to include('- [x] Completed task')
+      expect(markdown).not_to include('<input')
+    end
+
+    it 'handles checkboxes in nested list items' do
+      html = '<ul><li>Parent<ul><li><input type="checkbox">Nested task</li></ul></li></ul>'
+      markdown = convert_html_fragment(html)
+      expect(markdown).to include('- [ ] Nested task')
+      expect(markdown).not_to include('<input')
     end
 
     it 'normalizes abstract wrappers from fixture html without blockquote markers' do
@@ -371,6 +439,119 @@ RSpec.describe Sourcerer::MarkDownGrade do
           described_class.bootstrap!
           markdown = described_class.convert_html(html_with_frontmatter, convert_tables_to_markdown: false)
           expect(markdown).to include('<table>')
+        end
+      end
+    end
+
+    describe 'definition list conversion' do
+      it 'converts all DLs to markdown when global mode is enabled' do
+        described_class.bootstrap!(convert_dls_to_markdown: true)
+        html = '<dl><dt>Term</dt><dd>Def</dd></dl>'
+        markdown = convert_html_fragment(html)
+        expect(markdown).to include('*Term:*')
+        expect(markdown).not_to include('<dl>')
+      end
+
+      it 'keeps all DLs as HTML when global mode is disabled (default)' do
+        described_class.bootstrap!(convert_dls_to_markdown: false)
+        html = '<dl><dt>Term</dt><dd>Def</dd></dl>'
+        markdown = convert_html_fragment(html)
+        expect(markdown).to include('<dl>')
+        expect(markdown).not_to include('*Term:*')
+      end
+
+      it 'respects .no-markdown class to prevent conversion with global mode enabled' do
+        described_class.bootstrap!(convert_dls_to_markdown: true)
+        html = '<dl class="no-markdown"><dt>Term</dt><dd>Def</dd></dl>'
+        markdown = convert_html_fragment(html)
+        expect(markdown).not_to include('*Term:*')
+        expect(markdown).to include('<dl')
+      end
+
+      it 'respects .no-markdown on parent div wrapper to prevent conversion' do
+        described_class.bootstrap!(convert_dls_to_markdown: true)
+        html = '<div class="dlist no-markdown"><dl><dt>Term</dt><dd>Def</dd></dl></div>'
+        markdown = convert_html_fragment(html)
+        expect(markdown).not_to include('*Term:*')
+        expect(markdown).to include('<dl>')
+      end
+
+      it 'respects .to-markdown class to force conversion with global mode disabled' do
+        described_class.bootstrap!(convert_dls_to_markdown: false)
+        html = '<dl class="to-markdown"><dt>Term</dt><dd>Def</dd></dl>'
+        markdown = convert_html_fragment(html)
+        expect(markdown).to include('*Term:*')
+        expect(markdown).not_to include('<dl>')
+      end
+
+      it 'respects .to-markdown on parent div wrapper to force conversion' do
+        described_class.bootstrap!(convert_dls_to_markdown: false)
+        html = '<div class="dlist to-markdown"><dl><dt>Term</dt><dd>Def</dd></dl></div>'
+        markdown = convert_html_fragment(html)
+        expect(markdown).to include('*Term:*')
+        expect(markdown).not_to include('<dl>')
+      end
+
+      it 'prefers .no-markdown over global conversion mode' do
+        described_class.bootstrap!(convert_dls_to_markdown: true)
+        html = '<dl class="no-markdown to-markdown"><dt>Term</dt><dd>Def</dd></dl>'
+        markdown = convert_html_fragment(html)
+        expect(markdown).not_to include('*Term:*')
+        expect(markdown).to include('<dl')
+      end
+
+      describe 'frontmatter-based DL conversion mode' do # rubocop:disable RSpec/NestedGroups
+        it 'extracts dls-to-markdown from YAML frontmatter' do
+          html_with_frontmatter = <<~HTML
+            ---
+            dls-to-markdown: true
+            ---
+
+            <dl><dt>Term</dt><dd>Def</dd></dl>
+          HTML
+          described_class.bootstrap!(convert_dls_to_markdown: false)
+          markdown = described_class.convert_html(html_with_frontmatter)
+          expect(markdown).to include('*Term:*')
+          expect(markdown).not_to include('<dl>')
+        end
+
+        it 'respects dls-to-markdown: false in YAML frontmatter' do
+          html_with_frontmatter = <<~HTML
+            ---
+            dls-to-markdown: false
+            ---
+
+            <dl><dt>Term</dt><dd>Def</dd></dl>
+          HTML
+          described_class.bootstrap!(convert_dls_to_markdown: true)
+          markdown = described_class.convert_html(html_with_frontmatter)
+          expect(markdown).to include('<dl>')
+        end
+
+        it 'accepts convert_dls_to_markdown option to override frontmatter' do
+          html_with_frontmatter = <<~HTML
+            ---
+            dls-to-markdown: true
+            ---
+
+            <dl><dt>Term</dt><dd>Def</dd></dl>
+          HTML
+          described_class.bootstrap!
+          markdown = described_class.convert_html(html_with_frontmatter, convert_dls_to_markdown: false)
+          expect(markdown).to include('<dl>')
+        end
+
+        it 'accepts per-dl .no-markdown to override frontmatter setting' do
+          html_with_frontmatter = <<~HTML
+            ---
+            dls-to-markdown: true
+            ---
+
+            <dl class="no-markdown"><dt>Exempt</dt><dd>Kept as HTML</dd></dl>
+          HTML
+          markdown = described_class.convert_html(html_with_frontmatter)
+          expect(markdown).not_to include('*Exempt:*')
+          expect(markdown).to include('<dl')
         end
       end
     end
