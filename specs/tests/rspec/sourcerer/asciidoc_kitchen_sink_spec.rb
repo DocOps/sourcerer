@@ -54,7 +54,9 @@ RSpec.describe Sourcerer::AsciiDoc do
     expect(frontmatter).to be_a(Hash)
     expect(frontmatter['computed-attr']).to eq('docs-layout')
     expect(markdown).to include("computed-attr: docs-layout\n")
-    expect(markdown).to include('<dl>', '<a id="')
+    # Definition lists are now converted to Markdown format with italicized terms
+    expect(markdown).to match(/\*[^*]+:\*/)
+    expect(markdown).to include('<a id="')
     expect(markdown).to match(/\(#anchor-1\)|href="#anchor-1"/)
     expect(markdown).to match(%r{\*\*NOTE:\*\*|<span class="title-label">Note: </span>})
   end
@@ -78,8 +80,6 @@ RSpec.describe Sourcerer::AsciiDoc do
       "**Optional title**  \nA simple paragraph with an optional title.",
       "- bullet 2\n  - bullet 2a\n  - bullet 2b",
       "2. number\n  1. letter\n  2. letter",
-      '<dl class="horizontal">',
-      '<dl class="qanda">',
       '## 3. Notices',
       '```javascript')
 

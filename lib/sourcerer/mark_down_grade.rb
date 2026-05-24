@@ -22,7 +22,8 @@ module Sourcerer
     @config = {
       preserve_heading_ids: true,
       strip_internal_links: false,
-      convert_tables_to_markdown: false
+      convert_tables_to_markdown: false,
+      convert_dls_to_markdown: true
     }
 
     class << self
@@ -34,6 +35,7 @@ module Sourcerer
     #   preserve_heading_ids: (default: true) Include <a id="..."> anchors before headings
     #   strip_internal_links: (default: false) Remove href from internal anchor links, keeping only text
     #   convert_tables_to_markdown: (default: false) Convert all tables to markdown UNLESS they have .no-markdown class
+    #   convert_dls_to_markdown: (default: true) Convert all DLs to markdown UNLESS they have .no-markdown class
     def self.bootstrap! options={}
       @config.merge!(options)
 
@@ -47,6 +49,7 @@ module Sourcerer
       register_blockquote_converter
       register_comment_converter
       register_link_converter
+      register_list_converters
     end
 
     # Enhanced Pre converter to handle additional code block language patterns
@@ -138,33 +141,65 @@ module Sourcerer
       end
     end
 
-    # Definition list converter: preserve semantic list tags in output.
-    class DlConverter < ReverseMarkdown::Converters::Base
+    # Definition list passthrough/converter: converts DL blocks to Markdown by default.
+    # DL blocks with .to-markdown class (or a parent div with that class) are converted to Markdown.
+    # Supports global conversion via convert_dls_to_markdown config or dls-to-markdown frontmatter key.
+    # Per-node .to-markdown and .no-markdown classes override the global mode.
+    # In AsciiDoc html5 output, [.to-markdown] on a dlist places the class on the outer <div>.
+    class DlPassthrough < ReverseMarkdown::Converters::Base
       def convert node, state={}
-        body = node.children.map { |child| treat(child, state) }.join.strip
-        attrs = []
-        attrs << %( class="#{node['class']}") if node['class']
-        attrs << %( role="#{node['role']}") if node['role']
-        "<dl#{attrs.join}>\n#{body}\n</dl>\n"
+        global_mode = Thread.current[:sourcerer_dl_conversion_mode] || false
+
+        has_to_markdown = check_class_on_node(node, 'to-markdown')
+        has_no_markdown = check_class_on_node(node, 'no-markdown')
+
+        # Also check parent <div> wrapper (html5 backend wraps dl in <div class="dlist ...">)
+        parent = node.parent
+        if parent && parent.name == 'div'
+          has_to_markdown ||= check_class_on_node(parent, 'to-markdown')
+          has_no_markdown ||= check_class_on_node(parent, 'no-markdown')
+        end
+
+        should_convert = if has_no_markdown
+                           false
+                         elsif has_to_markdown
+                           true
+                         else
+                           global_mode
+                         end
+
+        if should_convert
+          body = node.children.map { |child| treat(child, state) }.join.strip
+          "#{body}\n"
+        else
+          "#{node.to_html}\n"
+        end
+      end
+
+      private
+
+      def check_class_on_node node, class_name
+        node['class'].to_s.split.include?(class_name)
       end
     end
 
-    # Definition term converter: preserves <dt> with classes, converts content.
+    # Definition term converter: formats term as italicized with colon.
     class DtConverter < ReverseMarkdown::Converters::Base
       def convert node, state={}
-        class_attr = node['class'] ? %( class="#{node['class']}") : ''
-        "<dt#{class_attr}>#{treat_children(node, state)}</dt>\n"
+        term_text = treat_children(node, state).strip
+        "*#{term_text}:*\n"
       end
     end
 
-    # Definition description converter: preserves <dd>, converts nested content.
+    # Definition description converter: indents definition content by 3 spaces for Markdown.
+    # Block-level elements (lists, code blocks, etc.) within a definition are indented as-is,
+    # preserving their internal structure while still visually nesting under the term.
     class DdConverter < ReverseMarkdown::Converters::Base
       def convert node, state={}
-        content = treat_children(node, state)
-        attrs = []
-        attrs << %( class="#{node['class']}") if node['class']
-        attrs << %( role="#{node['role']}") if node['role']
-        "<dd#{attrs.join}>\n#{content.strip}\n</dd>\n"
+        content = treat_children(node, state).strip
+        # Indent all lines of the definition by 3 spaces (works for both inline and block content)
+        indented = content.split("\n").map { |line| "   #{line}" }.join("\n")
+        "#{indented}\n\n"
       end
     end
 
@@ -509,7 +544,7 @@ module Sourcerer
                    is_checked = checkbox['checked'] || checkbox['data-item-complete'] == '1'
                    # Remove the checkbox from the DOM so it doesn't get rendered again
                    checkbox.remove
-                   is_checked ? '<!--CHECKBOX_CHECKED--> ' : '<!--CHECKBOX_UNCHECKED--> '
+                   is_checked ? '- <!--CHECKBOX_CHECKED--> ' : '- <!--CHECKBOX_UNCHECKED--> '
                  else
                    prefix_for(node)
                  end
@@ -526,9 +561,11 @@ module Sourcerer
         result = "#{indentation}#{prefix}#{content}\n"
 
         nested_lists.each do |nested_list|
-          nested_state = state.merge(ol_count: state.fetch(:ol_count, 0) + 1)
-          nested_md = treat(nested_list, nested_state).strip
-          result << "#{nested_md}\n" unless nested_md.empty?
+          # Pass the same state; the Ul/Ol converter will handle ol_count incrementing.
+          # Use sub to strip only the leading newline emitted by the Ul/Ol converter,
+          # preserving per-line indentation built by indentation_from.
+          nested_md = treat(nested_list, state).sub(/\A\n+/, '').rstrip
+          result << "#{nested_md}\n" unless nested_md.strip.empty?
         end
 
         result
@@ -546,8 +583,11 @@ module Sourcerer
       end
 
       def indentation_from state
+        # Mirror ReverseMarkdown's built-in Li behaviour: ol_count is incremented by the
+        # Ul/Ol converter before reaching LI, so subtract 1 to get the nesting depth.
+        # ol_count 1 = top level (no indent), 2 = nested once (2 spaces), etc.
         length = state.fetch(:ol_count, 0)
-        '   ' * [length - 1, 0].max
+        '  ' * [length - 1, 0].max
       end
     end # class LiWithNestedLists
 
@@ -570,8 +610,10 @@ module Sourcerer
     end
 
     # Register all definition list converters.
+    # DlPassthrough handles opt-in conversion; DtConverter and DdConverter are
+    # called only when DlPassthrough decides to convert a given <dl>.
     def self.register_dl_converters
-      ReverseMarkdown::Converters.register :dl, DlConverter.new
+      ReverseMarkdown::Converters.register :dl, DlPassthrough.new
       ReverseMarkdown::Converters.register :dt, DtConverter.new
       ReverseMarkdown::Converters.register :dd, DdConverter.new
     end
@@ -618,6 +660,11 @@ module Sourcerer
       ReverseMarkdown::Converters.register :a, LinkConverter.new
     end
 
+    # Register list item converter to handle nested lists and checkboxes.
+    def self.register_list_converters
+      ReverseMarkdown::Converters.register :li, LiWithNestedLists.new
+    end
+
     # Normalize block titles so escaped inline emphasis from html5s is converted
     # to markdown emphasis consistently with html5 conversions.
     def self.normalize_block_title text
@@ -650,13 +697,16 @@ module Sourcerer
     # Convert HTML into Markdown with MarkDownGrade converters.
     # Options include:
     #   convert_tables_to_markdown: Override global config for table conversion (true/false)
+    #   convert_dls_to_markdown: Override global config for DL conversion (true/false)
     def self.convert_html html, options={}
       bootstrap! unless @setup_complete
       @setup_complete = true
 
-      # Determine effective table conversion mode
-      effective_mode = determine_table_conversion_mode(html.to_s, options)
-      Thread.current[:sourcerer_table_conversion_mode] = effective_mode
+      # Determine effective table and DL conversion modes
+      effective_table_mode = determine_table_conversion_mode(html.to_s, options)
+      effective_dl_mode = determine_dl_conversion_mode(html.to_s, options)
+      Thread.current[:sourcerer_table_conversion_mode] = effective_table_mode
+      Thread.current[:sourcerer_dl_conversion_mode] = effective_dl_mode
 
       begin
         normalized_html = normalize_html_for_markdown(html.to_s)
@@ -665,11 +715,21 @@ module Sourcerer
         markdown = markdown.gsub(/<figcaption>\s+/, '<figcaption>')
         markdown = markdown.gsub(%r{\s+</figcaption>}, '</figcaption>')
 
-        markdown.gsub('<!--CHECKBOX_CHECKED-->', '- [x]')
-                .gsub('<!--CHECKBOX_UNCHECKED-->', '- [ ]')
+        # Replace checkbox markers: handle indented list items and maintain correct dash placement
+        replace_checkbox_markers(markdown)
       ensure
         Thread.current[:sourcerer_table_conversion_mode] = nil
+        Thread.current[:sourcerer_dl_conversion_mode] = nil
       end
+    end
+
+    # Replace checkbox placeholder markers with proper Markdown checkbox syntax.
+    # Handles various indentation levels and ensures correct list item formatting.
+    def self.replace_checkbox_markers markdown
+      # Replace checkbox markers that appear after list item dashes
+      # Pattern: optional indentation + dash + space + marker + space
+      markdown.gsub(/^(\s*- )<!--CHECKBOX_CHECKED-->\s/, '\1[x] ')
+              .gsub(/^(\s*- )<!--CHECKBOX_UNCHECKED-->\s/, '\1[ ] ')
     end
 
     def self.convert html, options={}
@@ -773,6 +833,38 @@ module Sourcerer
       @config[:convert_tables_to_markdown]
     end
 
+    # Determine the effective DL conversion mode from options, frontmatter, or global config.
+    #
+    # Precedence:
+    # 1. Explicit convert_dls_to_markdown option in parameters
+    # 2. Document-level setting from frontmatter key: dls-to-markdown
+    # 3. Global config setting
+    #
+    # @param html_body [String] The HTML document body.
+    # @param options [Hash] Optional override.
+    # @return [Boolean] Whether DLs should be converted to markdown by default.
+    def self.determine_dl_conversion_mode html_body, options
+      return options[:convert_dls_to_markdown] if options.key?(:convert_dls_to_markdown)
+
+      document_mode = extract_dl_conversion_mode_from_html(html_body)
+      return document_mode unless document_mode.nil?
+
+      @config[:convert_dls_to_markdown]
+    end
+
+    # Extract DL conversion mode from document frontmatter.
+    #
+    # Checks for YAML frontmatter key: dls-to-markdown
+    #
+    # @param html_body [String] The HTML document body.
+    # @return [Boolean, nil] The setting if found, nil otherwise.
+    def self.extract_dl_conversion_mode_from_html html_body
+      frontmatter = Sourcerer::YamlFrontmatter.extract(html_body)
+      return string_to_boolean(frontmatter['dls-to-markdown']) if frontmatter.key?('dls-to-markdown')
+
+      nil
+    end
+
     # Extract table conversion mode from document frontmatter or page attributes.
     #
     # Checks for:
@@ -820,6 +912,8 @@ module Sourcerer
                          :clean_html5s_tables!,
                          :determine_table_conversion_mode,
                          :extract_table_conversion_mode_from_html,
+                         :determine_dl_conversion_mode,
+                         :extract_dl_conversion_mode_from_html,
                          :string_to_boolean
   end # module MarkDownGrade
 end # module Sourcerer

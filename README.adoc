@@ -37,11 +37,11 @@ endif::[]
 :this_prod_name: {this_proj_name}
 // end::universal-settings[]
 :this_prod_vrsn_major: 0
-:this_prod_vrsn_minor: 4
+:this_prod_vrsn_minor: 5
 :this_prod_vrsn_majmin: {this_prod_vrsn_major}.{this_prod_vrsn_minor}
 :this_prod_vrsn_patch: 0
 :this_prod_vrsn: {this_prod_vrsn_majmin}.{this_prod_vrsn_patch}
-:next_prod_vrsn: 0.5.0
+:next_prod_vrsn: 0.6.0
 // end::global-settings[]
 // end::ai-prompt[]
 :toc: macro
@@ -219,7 +219,8 @@ For end-to-end AsciiDoc conversion, use `Sourcerer::AsciiDoc.mark_down_grade`, w
 
 Core behavior defaults::
 * Preserve section heading anchors.
-* Preserve semantic definition lists (`<dl>`, `<dt>`, `<dd>`).
+* Convert definition lists (`<dl>`, `<dt>`, `<dd>`) to Markdown by default (opt-out via `.no-markdown`).
+* Preserve HTML tables as-is by default (opt-in conversion via `.to-markdown`).
 * Preserve frontmatter when enabled.
 * Support semantic backend requests with fallback (`asciidoctor-html5s` -> `html5s` or `html5`).
 
@@ -257,6 +258,91 @@ markdown = Sourcerer::MarkDownGrade.convert_html(
 )
 
 puts(markdown)
+----
+
+[[markdowngrade-opt-in-conversion]]
+==== Conversion Controls: Tables and Definition Lists
+
+HTML tables are preserved as HTML by default; definition lists are *converted to Markdown by default*.
+Both support the same opt-in/opt-out class, frontmatter, and global-config mechanism.
+
+[[table-conversion]]
+===== Table conversion
+
+[cols="1,3",options="header"]
+|===
+| Control | Behaviour
+| `.to-markdown` class on `<table>` or its `<div>` wrapper
+| Always convert this table to Markdown pipe syntax.
+| `.no-markdown` class on `<table>` or wrapper
+| Always keep this table as HTML (overrides global and frontmatter settings).
+| `tables-to-markdown: true` in YAML frontmatter
+| Convert all tables in the document unless `.no-markdown` overrides.
+| `convert_tables_to_markdown: true` in `bootstrap!` or `convert_html` options
+| Global default; overridden by frontmatter and per-table classes.
+|===
+
+.AsciiDoc example: per-table opt-in
+[source,asciidoc]
+----
+[.to-markdown]
+|===
+| Col A | Col B
+| value | value
+|===
+----
+
+[[dl-conversion]]
+===== Definition list (DL) conversion
+
+Definition lists (`<dl>/<dt>/<dd>`) are converted to Markdown by default.
+Rich content nested inside `<dd>` elements (lists, fenced code blocks, inline code) is recursively down-graded along with the parent term.
+Use `.no-markdown` to preserve a specific DL as HTML.
+
+When converted to Markdown, `<dt>` terms are rendered as `+*Term:*+`, and `<dd>` definitions are indented by three spaces.
+Block-level content inside `<dd>` (lists, fenced code blocks) is preserved within the indented block.
+
+[cols="1,3",options="header"]
+|===
+| Control | Behaviour
+| `.to-markdown` class on `<dl>` or its parent `<div>`
+| Force conversion to Markdown even when global mode is disabled.
+| `.no-markdown` class on `<dl>` or parent `<div>`
+| Keep this DL as HTML (overrides global and frontmatter settings).
+| `dls-to-markdown: false` in YAML frontmatter
+| Preserve all DLs in the document as HTML unless `.to-markdown` overrides.
+| `convert_dls_to_markdown: false` in `bootstrap!` or `convert_html` options
+| Disable conversion globally; overridden by frontmatter and per-DL classes.
+|===
+
+.AsciiDoc example: per-list opt-out
+[source,asciidoc]
+--------
+Release checklist::
+
+- [ ] Tests pass
+- [ ] README updated
+
+Config reference::
++
+[source,yaml]
+----
+key: value
+----
+
+--------
+
+.Expected Markdown output
+[source,markdown]
+----
+*Release checklist:*
+   - [ ] Tests pass
+   - [ ] README updated
+
+*Config reference:*
+   ```yaml
+   key: value
+   ```
 ----
 
 [[markdowngrade-migration]]

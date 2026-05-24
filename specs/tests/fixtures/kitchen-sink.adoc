@@ -285,6 +285,7 @@ mailto:root@localhost[email admin]
 
 ---
 
+[.to-markdown]
 .Definition (labeled) lists
 Term 1:: Definition 1
 Term 2:: Definition 2
