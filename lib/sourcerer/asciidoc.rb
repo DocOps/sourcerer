@@ -43,9 +43,12 @@ module Sourcerer
     # Loads AsciiDoc attributes from a document header as a Hash.
     #
     # @param path [String] The path to the AsciiDoc file.
+    # @param user_only [Boolean] When true, strips Asciidoctor built-in attributes
+    #   and returns only user-defined attributes. Defaults to false.
     # @return [Hash] A hash of the document attributes.
-    def self.load_attributes path
+    def self.load_attributes path, user_only: false
       doc = Asciidoctor.load_file(path, safe: :unsafe)
+      return AttributesFilter.user_attributes(doc) if user_only
       doc.attributes
     end
 

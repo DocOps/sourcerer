@@ -62,7 +62,7 @@ module Sourcerer
       attributes.each_with_object({}) do |entry, acc|
         source = entry[:source]
         name   = entry[:name] || File.basename(source, '.adoc').to_sym
-        acc[name.to_sym] = Sourcerer::AsciiDoc.load_attributes(source)
+        acc[name.to_sym] = Sourcerer::AsciiDoc.load_attributes(source, user_only: true)
       end
     end
 
