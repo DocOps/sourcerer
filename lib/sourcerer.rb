@@ -23,7 +23,6 @@ module Sourcerer
   # File extensions recognised as AsciiDoc source files.
   ASCIIDOC_EXTS  = %w[.adoc .asciidoc .asc .ad].freeze
 
-  autoload :AttributesFilter, 'sourcerer/attributes_filter'
   autoload :YamlFrontmatter,     'sourcerer/yaml_frontmatter'
   autoload :Jekyll,              'sourcerer/jekyll'
   autoload :MarkDownGrade,       'sourcerer/mark_down_grade'
