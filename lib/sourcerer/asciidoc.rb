@@ -49,6 +49,7 @@ module Sourcerer
     def self.load_attributes path, user_only: false
       doc = Asciidoctor.load_file(path, safe: :unsafe)
       return AttributesFilter.user_attributes(doc) if user_only
+
       doc.attributes
     end
 
@@ -195,16 +196,19 @@ module Sourcerer
     #
     # @param source_path [String] Path to AsciiDoc source file.
     # @param markdown_output_path [String, nil] Optional markdown output path.
+    # @param markdown_converter [#call, nil] Callable that accepts `(html, markdown_options)`.
+    #   Defaults to Sourcerer::MarkDownGrade.convert_html when nil.
     # @param html_output_path [String, nil] Optional HTML output path.
     # @param backend [String] HTML backend request (`html5` or `asciidoctor-html5s`).
     # @param header_footer [Boolean] Whether interim HTML should include document wrapper.
     # @param include_frontmatter [Boolean] Whether to prepend markdown YAML front matter.
     # @param markdown_options [Hash] Options passed to markdown converter.
-    # @param markdown_converter [#call] Callable that accepts `(html, markdown_options)`.
     # @param convert_tables_to_markdown [Boolean] Convert all tables to markdown UNLESS they have .no-markdown class.
     # @return [Hash] Conversion result containing markdown, frontmatter, and backend info.
-    def self.mark_down_grade source_path, markdown_output_path=nil, markdown_converter:, **options
+    def self.mark_down_grade source_path, markdown_output_path=nil, markdown_converter: nil, **options
       options = normalize_mark_down_grade_options(options)
+
+      markdown_converter ||= ->(html, opts) { Sourcerer::MarkDownGrade.convert_html(html, opts || {}) }
 
       source_text = File.read(source_path)
       conversion_source_text = strip_yaml_frontmatter(source_text)
