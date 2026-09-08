@@ -33,4 +33,5 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'kramdown-asciidoc', '~> 2.1'
   spec.add_dependency 'liquid', '~> 4.0'
   spec.add_dependency 'reverse_markdown', '~> 2.1'
+  spec.add_dependency 'yard', '~> 0.9'
 end

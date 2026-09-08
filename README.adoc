@@ -100,8 +100,10 @@ AsciiDoc-to-Markdown conversion::
 Convert AsciiDoc documents to Markdown for agentic consumption, with a focus on preserving semantic structure and document frontmatter.
 See <<markdowngrade>>.
 
-AsciiDoc and Markdown source inspection::
-Skim AsciiDoc documents to produce machine-oriented outlines of sections, code blocks, tables, and other semantic elements for tooling and agent consumption.
+AsciiDoc, Markdown, and Ruby source inspection::
+Skim source files to produce machine-oriented outlines.
+For AsciiDoc files, includes sections, code blocks, tables, and other semantic elements for tooling and agent consumption.
+For Ruby files, includes classes, modules, methods and their docstrings.
 See <<source-skim>>.
 
 General-purpose utilities::
@@ -523,13 +525,15 @@ Schema-aware filters (including SGYML-specific classification filters) should be
 [[source-skim]]
 === SourceSkim
 
-`Sourcerer::SourceSkim` generates machine-oriented _skims_ of AsciiDoc and Markdown source documents.
+`Sourcerer::SourceSkim` generates machine-oriented _skims_ of AsciiDoc, Markdown, and Ruby source documents.
 
 A skim is a structured, JSON/YAML-ready outline of selected source elements.
 AsciiDoc skims include:
 sections, code blocks, definition lists, tables, images, and more.
 
 Markdown skims include only sections and frontmatter, since other semantic elements are not reliably parseable in Markdown's freeform syntax.
+
+Ruby skims include classes, modules, and methods, along with their docstrings.
 
 Skims are intended to help tooling and agents inspect documentation source without ingesting full file contents.
 
@@ -550,6 +554,9 @@ skim = Sourcerer::SourceSkim.skim_string(raw_adoc_content)
 
 # Skim Markdown file with flat sections only
 skim = Sourcerer::SourceSkim.skim_file('README.md', forms: [:flat])
+
+# Skim a Ruby file with docstrings
+skim = Sourcerer::SourceSkim.skim_file('lib/my_gem.rb', forms: [:tree], descriptions: true)
 ----
 
 Section shapes::
@@ -577,7 +584,6 @@ It stores the result as the `source-skim-result` document attribute and reads `s
 require 'asciidoctor/extensions/source-skim-tree-processor/extension'
 Asciidoctor::Extensions.register Sourcerer::SourceSkim::TreeProcessorExtension
 ----
-
 
 [[utilities]]
 === Utilities

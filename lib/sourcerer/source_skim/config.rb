@@ -30,11 +30,12 @@ module Sourcerer
     # arguments on {Sourcerer::SourceSkim.skim_file} and friends.
     # @api private
     class Config
-      attr_reader :forms, :categories
+      attr_reader :forms, :categories, :descriptions
 
-      def initialize forms: [:tree], categories: nil
+      def initialize forms: [:tree], categories: nil, descriptions: false
         @forms = Array(forms).map(&:to_sym)
         @categories = categories ? Array(categories).map(&:to_sym) : DEFAULT_CATEGORIES.dup
+        @descriptions = descriptions
       end
 
       def include? category
@@ -47,6 +48,10 @@ module Sourcerer
 
       def flat?
         @forms.include?(:flat)
+      end
+
+      def descriptions?
+        @descriptions
       end
     end
   end

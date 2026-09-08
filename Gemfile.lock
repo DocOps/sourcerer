@@ -9,6 +9,7 @@ PATH
       kramdown-asciidoc (~> 2.1)
       liquid (~> 4.0)
       reverse_markdown (~> 2.1)
+      yard (~> 0.9)
 
 GEM
   remote: https://rubygems.org/

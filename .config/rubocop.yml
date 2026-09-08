@@ -43,6 +43,7 @@ Metrics/ParameterLists:
     #  discoverability.
     - lib/sourcerer/sync/block_parser.rb
     - lib/sourcerer/sync/cast.rb
+    - lib/sourcerer/source_skim.rb
 
 RSpec/SpecFilePathFormat:
   CustomTransform:
