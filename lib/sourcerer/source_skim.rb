@@ -6,6 +6,7 @@ require_relative 'yaml_frontmatter'
 require_relative 'source_skim/config'
 require_relative 'source_skim/skimmer'
 require_relative 'source_skim/markdown_skimmer'
+require_relative 'source_skim/ruby_skimmer'
 
 module Sourcerer
   # SourceSkim produces machine-oriented skims of markup source documents.
@@ -57,11 +58,15 @@ module Sourcerer
     # @param attributes [Hash{String => String}] AsciiDoc only. Asciidoctor
     #   attribute overrides. Silently ignored for Markdown.
     # @return [Hash] JSON-ready skim
-    def self.skim_file file_path, forms: nil, format: nil, categories: nil, attributes: {}
+    def self.skim_file file_path, forms: nil, format: nil, categories: nil, attributes: {}, descriptions: false
       fmt = format || detect_format(file_path)
       if fmt == :markdown
         config = Config.new(forms: forms || [:flat])
         MarkdownSkimmer.new.process(File.read(file_path), config: config)
+      elsif fmt == :ruby
+        RubySkimmer.new.process(
+          File.read(file_path),
+          config: Config.new(forms: forms || [:flat], descriptions: descriptions))
       else
         attrs = LOAD_OPTS[:attributes].merge(attributes)
         opts  = LOAD_OPTS.merge(attributes: attrs)
@@ -82,10 +87,12 @@ module Sourcerer
     # @param categories [Array<Symbol>, nil] AsciiDoc only
     # @param attributes [Hash{String => String}] AsciiDoc only
     # @return [Hash] JSON-ready skim
-    def self.skim_string content, format: :asciidoc, forms: nil, categories: nil, attributes: {}
+    def self.skim_string content, format: :asciidoc, forms: nil, categories: nil, attributes: {}, descriptions: false
       if format == :markdown
         config = Config.new(forms: forms || [:flat])
         MarkdownSkimmer.new.process(content, config: config)
+      elsif format == :ruby
+        RubySkimmer.new.process(content, config: Config.new(forms: forms || [:flat], descriptions: descriptions))
       else
         attrs = LOAD_OPTS[:attributes].merge(attributes)
         opts  = LOAD_OPTS.merge(attributes: attrs)
@@ -113,6 +120,8 @@ module Sourcerer
       ext = File.extname(file_path).downcase
       if Sourcerer::MARKDOWN_EXTS.include?(ext)
         :markdown
+      elsif ext == '.rb'
+        :ruby
       else
         :asciidoc
       end
