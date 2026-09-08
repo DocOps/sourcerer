@@ -255,6 +255,82 @@ RSpec.describe Sourcerer::SourceSkim do
         expect(img[:starts_at]).to be_a(Integer)
       end
     end
+
+    # -- includes ---------------------------------------------------------------
+    describe 'includes' do
+      let(:content) do
+        <<~ADOC
+          = Includes Test
+
+          include::part1.adoc[tags="foo"]
+
+          == Section One
+
+          [source,ruby]
+          ----
+          # include::should_not_count.adoc[]
+          puts 'hi'
+          ----
+
+          include::part2.adoc[leveloffset="-1"]
+
+          Content.
+        ADOC
+      end
+      let(:result) { described_class.skim_string(content) }
+
+      it 'is emitted by default' do
+        expect(result).to have_key(:includes)
+      end
+
+      it 'captures top-level include directives regardless of whether they resolve' do
+        targets = result[:includes].map { |i| i[:target] }
+        expect(targets).to include('part1.adoc', 'part2.adoc')
+      end
+
+      it 'parses tags and leveloffset attributes off the directive' do
+        part1 = result[:includes].find { |i| i[:target] == 'part1.adoc' }
+        part2 = result[:includes].find { |i| i[:target] == 'part2.adoc' }
+        expect(part1[:tags]).to eq('foo')
+        expect(part2[:leveloffset]).to eq('-1')
+      end
+
+      it 'records starts_at as an integer matching the real source line' do
+        part1 = result[:includes].find { |i| i[:target] == 'part1.adoc' }
+        expect(part1[:starts_at]).to eq(3)
+      end
+
+      it 'does not double-count an include directive shown as text inside a listing block' do
+        expect(result[:includes].map { |i| i[:target] }).not_to include('should_not_count.adoc')
+      end
+    end
+
+    # -- title fallback for broken header --------------------------------------
+    describe 'title recovery when an unresolved include breaks header parsing' do
+      it 'recovers the real title instead of falling back to the first section' do
+        content = <<~ADOC
+          :my-attr: hello
+          include::nonexistent.adoc[]
+          = Recovered Title
+
+          == A Section
+
+          Content.
+        ADOC
+        result = described_class.skim_string(content)
+        expect(result[:title]).to eq('Recovered Title')
+      end
+
+      it 'still falls back to the first section for a genuinely untitled document' do
+        content = <<~ADOC
+          == Only Section
+
+          Content.
+        ADOC
+        result = described_class.skim_string(content)
+        expect(result[:title]).to eq('Only Section')
+      end
+    end
   end
 
   # ---------------------------------------------------------------------------

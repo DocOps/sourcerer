@@ -16,6 +16,7 @@ module Sourcerer
       admonitions
       quotes
       images
+      includes
     ].freeze
 
     # Categories included when a caller passes +categories: nil+ (the default).
