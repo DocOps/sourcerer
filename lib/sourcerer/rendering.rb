@@ -36,7 +36,8 @@ module Sourcerer
           render_entry[:out],
           data_object: data_obj,
           attrs_source: attrs_source,
-          engine: engine)
+          engine: engine,
+          vars: render_entry[:vars] || {})
       end
     end
 
@@ -49,8 +50,11 @@ module Sourcerer
     # @param includes_load_paths [Array<String>] Paths for Liquid includes.
     # @param attrs_source [String] The path to an AsciiDoc file for attributes.
     # @param engine [String] The template engine to use.
+    # @param vars [Hash] Arbitrary caller-supplied variables, exposed to the
+    #   template as `vars` (e.g. to parameterize a shared template between
+    #   multiple render entries in a manifest).
     def self.render_template template_file, data_file, out_file, **options
-      supported_option_keys = %i[data_object includes_load_paths attrs_source engine]
+      supported_option_keys = %i[data_object includes_load_paths attrs_source engine vars]
       unknown_option_keys = options.keys - supported_option_keys
       raise ArgumentError, "unknown option(s): #{unknown_option_keys.join(', ')}" unless unknown_option_keys.empty?
 
@@ -58,6 +62,7 @@ module Sourcerer
       includes_load_paths = options.fetch(:includes_load_paths, [])
       attrs_source = options[:attrs_source]
       engine = options.fetch(:engine, 'liquid')
+      vars = (options[:vars] || {}).transform_keys(&:to_s)
 
       data = load_render_data(data_file, attrs_source)
       out_file = File.expand_path(out_file)
@@ -68,7 +73,8 @@ module Sourcerer
 
       context = {
         data_object => data,
-        'include' => { data_object => data }
+        'include' => { data_object => data },
+        'vars' => vars
       }
 
       rendered = case engine.to_s

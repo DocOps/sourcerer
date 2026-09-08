@@ -5,6 +5,7 @@ _site/
 # Build paths
 built/
 build/
+lib/sourcerer/_docs/
 
 # Bundler
 .bundle/

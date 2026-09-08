@@ -1,0 +1,24 @@
+# Manifest of generated reference docs.
+#
+# Each entry describes one `Sourcerer::Rendering.render_template` job: a
+# Liquid (or ERB) template rendered against a YAML data file to an output
+# path. Paths are relative to the gem root. `vars` (optional) are exposed to
+# the template as the `vars` object, letting one template drive multiple
+# output variants (see the two `liquid-filters-ref` entries below).
+#
+# Run via `bundle exec rake generate:docs`.
+
+docs:
+  - name: liquid-filters-by-kind
+    template: docs/templates/liquid-filters-ref.adoc.liquid
+    data: specs/data/liquid-filters.yml
+    out: lib/sourcerer/_docs/partials/liquid-filters-by-kind.adoc
+    vars:
+      group_by: kind
+
+  - name: liquid-filters-by-source
+    template: docs/templates/liquid-filters-ref.adoc.liquid
+    data: specs/data/liquid-filters.yml
+    out: lib/sourcerer/_docs/partials/liquid-filters-by-source.adoc
+    vars:
+      group_by: source

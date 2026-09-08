@@ -18,6 +18,7 @@ Metrics/ModuleLength:
     - lib/sourcerer/mark_down_grade.rb
     - lib/sourcerer/rendering.rb
     - lib/sourcerer/sync/block_parser.rb # intentionally full; barely over
+    - lib/sourcerer/jekyll/liquid/filters.rb # flat list of small, independent filters
 
 Metrics/ClassLength:
   Exclude:
@@ -65,3 +66,23 @@ RSpec/ExampleLength:
   # Sync integration examples require inline heredoc fixtures plus the assertions
   #  that exercise them; extracting to let blocks rarely improves clarity here.
   Max: 15
+
+RSpec/DescribeClass:
+  Exclude:
+    # These specs exercise a registry of Liquid filters spanning multiple
+    #  gems/sources (AsciiSourcerer, Jekyll, jekyll-asciidoc, Shopify)
+    #  not one class.
+    - specs/tests/rspec/sourcerer/asciisourcerer_filters_yaml_spec.rb
+    - specs/tests/rspec/sourcerer/jekyll_filters_yaml_spec.rb
+    - specs/tests/rspec/sourcerer/jekyll_asciidoc_filters_yaml_spec.rb
+    - specs/tests/rspec/sourcerer/shopify_filters_yaml_spec.rb
+    # Exercises the docs-manifest.yml file/generation pipeline, not one class.
+    - specs/tests/rspec/sourcerer/docs_manifest_spec.rb
+
+RSpec/IteratedExpectation:
+  Exclude:
+    # Iterates to validate structural shape (required keys) across every
+    #  filter definition loaded from YAML, not a single repeated expectation.
+    - specs/tests/rspec/sourcerer/jekyll_filters_yaml_spec.rb
+    - specs/tests/rspec/sourcerer/jekyll_asciidoc_filters_yaml_spec.rb
+    - specs/tests/rspec/sourcerer/shopify_filters_yaml_spec.rb

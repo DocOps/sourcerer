@@ -33,7 +33,8 @@ RSpec.describe Sourcerer::Rendering do
       {
         data_object: 'data',
         attrs_source: nil,
-        engine: 'liquid'
+        engine: 'liquid',
+        vars: {}
       }
     ]
   end
@@ -48,6 +49,19 @@ RSpec.describe Sourcerer::Rendering do
       custom_template = write_file('release.erb', "<%= release['name'] %>")
       described_class.render_template(custom_template, data_file, out_file, engine: 'erb', data_object: 'release')
       expect(File.read(out_file)).to eq('world')
+    end
+
+    it 'exposes caller-supplied vars to the template' do
+      vars_template = write_file('vars.erb', "<%= vars['greeting'] %>, <%= data['name'] %>")
+      described_class.render_template(
+        vars_template, data_file, out_file, engine: 'erb', vars: { greeting: 'Hi' })
+      expect(File.read(out_file)).to eq('Hi, world')
+    end
+
+    it 'defaults vars to an empty Hash when not given' do
+      vars_template = write_file('novars.erb', '<%= vars.empty? %>')
+      described_class.render_template(vars_template, data_file, out_file, engine: 'erb')
+      expect(File.read(out_file)).to eq('true')
     end
 
     it 'rejects unknown options' do

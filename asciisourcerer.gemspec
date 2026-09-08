@@ -21,7 +21,13 @@ Gem::Specification.new do |spec|
   spec.metadata['allowed_push_host'] = 'https://rubygems.org'
   spec.metadata['rubygems_mfa_required'] = 'true'
 
-  spec.files = Dir['lib/**/*.rb', 'README.adoc', 'LICENSE', 'specs/docs/**/*.adoc']
+  spec.files = Dir['lib/**/*.rb',
+                   'lib/**/_docs/**/*.adoc',
+                   'README.adoc',
+                   'LICENSE',
+                   'BILL_OF_MATERIALS.adoc',
+                   'specs/docs/**/*.adoc'
+                  ]
   spec.require_paths = ['lib']
 
   # Development dependencies are in Gemfile per RuboCop best practices

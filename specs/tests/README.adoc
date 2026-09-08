@@ -18,6 +18,98 @@ Validate YAML fixtures and loader behavior:
 [.prompt]
  bundle exec rake yaml_test
 
+== Liquid Filter Testing
+
+AsciiSourcerer maintains a canonical registry of Liquid filters in [.path]`specs/data/liquid-filters.yml`.
+This file serves as the *source of truth* for filter documentation and functionality across your Ruby ecosystem.
+
+=== Overview
+
+The filter testing system:
+
+. Loads filter definitions from `liquid-filters.yml`
+. Extracts testable examples from each filter definition
+. Renders examples using real Liquid templates
+. Verifies output against expected values
+. Organizes tests by filter source (AsciiSourcerer, Jekyll, jekyll-asciidoc)
+
+Benefits of this approach:
+- Single source of truth: documentation and tests aligned
+- Executable examples: ensures docs match implementation
+- Extensible: adding new filters requires only YAML updates
+- Design-first: examples define contract before implementation
+
+=== Filter Definition Format
+
+Each filter in `specs/data/liquid-filters.yml` includes:
+
+```yaml
+- key: filter_name                    # unique identifier (underscored)
+  name: Human Readable Name           # display name
+  source: AsciiSourcerer|Jekyll|...   # gem/source origin
+  description: |                      # markdown description
+    Multi-line description of filter
+    functionality and use cases.
+  kind: category-name                 # functional category
+  tags: [tag1, tag2]                  # optional: searchable tags
+  examples:
+    - input: '{{ "value" | filter }}'  # Liquid template
+      output: expected_result          # expected output
+      test: false                       # optional: skip test if non-deterministic
+```
+
+=== Example Data
+
+Common test data is defined in the `example_data` section of `liquid-filters.yml`:
+
+[cols="1,2"]
+|===
+| `tags_array` | `["foo", "bar", "baz"]`
+| `my_flat_hash` | `{key1: valuu_one, key2: val_two, key3: 'third value'}`
+| `data.users` | Array of user objects with `user`, `level` properties
+| `data.members` | Array of members with `user`, `grad_year`, `projects`
+| `page.tags` | `["Seattle", "Tacoma", "Spokane"]`
+| `page.content` | `"One Two Three"`
+| `site` | `{url: "https://example.com", baseurl: "/docs"}`
+|===
+
+=== Running Filter Tests
+
+Run all filter tests:
+
+[.prompt]
+ bundle exec rspec specs/tests/rspec/sourcerer/*_filters_yaml_spec.rb
+
+Run AsciiSourcerer filter tests only:
+
+[.prompt]
+ bundle exec rspec specs/tests/rspec/sourcerer/asciisourcerer_filters_yaml_spec.rb
+
+Run Jekyll filter tests only:
+
+[.prompt]
+ bundle exec rspec specs/tests/rspec/sourcerer/jekyll_filters_yaml_spec.rb
+
+Run jekyll-asciidoc filter tests only:
+
+[.prompt]
+ bundle exec rspec specs/tests/rspec/sourcerer/jekyll_asciidoc_filters_yaml_spec.rb
+
+=== Filter Architecture
+
+The test infrastructure includes:
+
+[cols="2,3"]
+|===
+| File | Purpose
+| [.path]#specs/data/liquid-filters.yml# | Filter definitions and examples (source of truth)
+| [.path]#specs/tests/rspec/sourcerer/liquid_filters_spec_helper.rb# | Test helper module (loader, renderer, comparator)
+| [.path]#specs/tests/rspec/sourcerer/asciisourcerer_filters_yaml_spec.rb# | AsciiSourcerer filter tests
+| [.path]#specs/tests/rspec/sourcerer/jekyll_filters_yaml_spec.rb# | Jekyll filter tests
+| [.path]#specs/tests/rspec/sourcerer/jekyll_asciidoc_filters_yaml_spec.rb# | jekyll-asciidoc filter tests
+| [.path]#lib/sourcerer/jekyll/liquid/filters.rb# | Implementation of AsciiSourcerer filters
+|===
+
 == PR Test Suite
 
 Run the standard PR/CI test suite:
