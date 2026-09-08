@@ -30,6 +30,9 @@ templates:
       target: README.adoc
     - source: templates/README.asciidoc
       target: gems/docopslab-dev/README.adoc
+    - source: templates/CLAUDE.md
+      target: CLAUDE.md
+      synced: true
 
 tools:
   - tool: rubocop
@@ -59,6 +62,8 @@ tools:
         - .config/.vendor/**/*
         - build/**/*
         - .agent/**/*
+        - BILL_OF_MATERIALS.adoc
+        - lib/sourcerer/_docs/partials/*
 
   - tool: htmlproofer
     enabled: false  # Disabled by default, enable per project
