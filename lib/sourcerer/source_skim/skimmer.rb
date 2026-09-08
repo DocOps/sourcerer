@@ -16,6 +16,23 @@ module Sourcerer
       # raw text (i.e., were not resolved by the parser).
       INCLUDE_DIRECTIVE_PATTERN = /include::[^\[]+\[[^\]]*\]/
 
+      # Matches a real (non-code-block) include directive at the start of a line,
+      # capturing the target path and its attribute list.
+      INCLUDE_LINE_PATTERN = /\A\s*include::([^\[]+)\[([^\]]*)\]\s*\z/
+
+      # Toggled by classic listing (----) / literal (....) block delimiters, so
+      # #detect_general_includes can skip include directives already captured
+      # (as literal example text) by the code_blocks/literal_blocks categories.
+      FENCE_DELIMITER_PATTERN = /\A(?:-{4,}|\.{4,})\s*\z/
+
+      # A document with a real title line can still end up with no `title`
+      # document attribute if a preceding, unresolved include directive
+      # disrupts Asciidoctor's header parsing (a known Asciidoctor quirk, not
+      # something this document did wrong). When that happens, Document#doctitle
+      # silently falls back to the first section's title. Detect that specific
+      # failure mode and recover the real title from the raw source instead.
+      RAW_TITLE_LINE_PATTERN = /\A=\s+(\S.*)\z/
+
       def process document, config: Config.new
         @config = config
         @main_file = document.attr('docfile')
@@ -36,7 +53,7 @@ module Sourcerer
         assign_line_ends(tree, doc_end)
 
         result = {
-          title: document.doctitle,
+          title: doctitle_for(document),
           lines: doc_end
         }
 
@@ -61,11 +78,87 @@ module Sourcerer
         result[:admonitions]      = @admonitions       if @config.include?(:admonitions)
         result[:quotes]           = @quotes            if @config.include?(:quotes)
         result[:images]           = @images            if @config.include?(:images)
+        result[:includes]         = detect_general_includes(document) if @config.include?(:includes)
 
         result
       end
 
       private
+
+      # Prefer Asciidoctor's own doctitle, but recover from the header-parsing
+      # failure mode described at RAW_TITLE_LINE_PATTERN: if the `title`
+      # attribute never got set (the real signal that header parsing broke,
+      # as opposed to a document that's genuinely untitled), look for an
+      # explicit `= Title` line in the raw source before trusting the
+      # first-section fallback.
+      def doctitle_for document
+        return document.doctitle if document.attr('title')
+
+        raw_title = raw_doctitle(document)
+        raw_title || document.doctitle
+      end
+
+      def raw_doctitle document
+        lines = document.source_lines
+        return nil unless lines
+
+        lines.each do |line|
+          return ::Regexp.last_match(1) if line =~ RAW_TITLE_LINE_PATTERN
+          # A section heading appearing before any `=` title line means the
+          # document genuinely has no title; stop looking.
+          break if line =~ /\A==+\s+\S/
+        end
+        nil
+      end
+
+      # Scan the raw source (outside of listing/literal delimited blocks, which
+      # are already covered by the code_blocks/literal_blocks `includes` field)
+      # for include directives, whether or not they were resolved by the parser.
+      def detect_general_includes document
+        lines = document.source_lines
+        return [] unless lines
+
+        offset   = source_line_offset(document)
+        includes = []
+        in_fence = false
+        lines.each_with_index do |line, idx|
+          if line =~ FENCE_DELIMITER_PATTERN
+            in_fence = !in_fence
+            next
+          end
+          next if in_fence
+
+          next unless (m = line.match(INCLUDE_LINE_PATTERN))
+
+          entry = { target: m[1].strip, starts_at: idx + 1 + offset }
+          entry.merge!(parse_include_attrs(m[2]))
+          includes << entry
+        end
+        includes
+      end
+
+      # document.source_lines reflects content *after* skip-front-matter
+      # stripping, while every other category's starts_at comes from
+      # Asciidoctor's own line-number tracking, which counts the stripped
+      # front matter lines too. Compute that offset so line numbers stay
+      # consistent across the whole skim.
+      def source_line_offset document
+        front_matter = document.attr('front-matter')
+        return 0 unless front_matter && !front_matter.empty?
+
+        front_matter.count("\n") + 1 + 2 # captured lines + both '---' delimiters
+      end
+
+      def parse_include_attrs attrs_str
+        attrs = {}
+        if (m = attrs_str.match(/\btags?=("[^"]*"|'[^']*'|\S+)/))
+          attrs[:tags] = m[1].delete('"\'')
+        end
+        if (m = attrs_str.match(/\bleveloffset=("[^"]*"|'[^']*'|\S+)/))
+          attrs[:leveloffset] = m[1].delete('"\'')
+        end
+        attrs
+      end
 
       def line_count_for file_path
         return nil unless file_path && File.exist?(file_path)
