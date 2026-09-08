@@ -500,6 +500,15 @@ RSpec.describe Sourcerer::MarkDownGrade do
         expect(markdown).to include('<dl')
       end
 
+      it 'does not stack whitespace-only lines when DLs nest inside DLs' do
+        described_class.bootstrap!(convert_dls_to_markdown: true)
+        html = '<dl><dt>Outer</dt><dd><p>Intro.</p>' \
+               '<dl><dt>Inner</dt><dd><p>Nested def.</p></dd></dl></dd></dl>'
+        markdown = convert_html_fragment(html)
+        expect(markdown).not_to match(/\n[ \t]+\n/)
+        expect(markdown).not_to match(/\n{3,}/)
+      end
+
       describe 'frontmatter-based DL conversion mode' do # rubocop:disable RSpec/NestedGroups
         it 'extracts dls-to-markdown from YAML frontmatter' do
           html_with_frontmatter = <<~HTML
@@ -553,6 +562,51 @@ RSpec.describe Sourcerer::MarkDownGrade do
           expect(markdown).not_to include('*Exempt:*')
           expect(markdown).to include('<dl')
         end
+      end
+    end
+
+    describe 'horizontal DL (hdlist table) conversion' do
+      # Asciidoctor's html5 backend renders [horizontal] dlists as a classless
+      # <table> inside <div class="hdlist">, not as a <dl>.
+      def hdlist_html wrapper_class='hdlist'
+        "<div class=\"#{wrapper_class}\"><table><tr><td>Term</td>" \
+          '<td><p>Def</p></td></tr></table></div>'
+      end
+
+      it 'converts hdlist tables to markdown when global DL mode is enabled' do
+        described_class.bootstrap!(convert_dls_to_markdown: true)
+        markdown = convert_html_fragment(hdlist_html)
+        expect(markdown).to include('**Term:** Def')
+        expect(markdown).not_to include('<table>')
+      end
+
+      it 'keeps hdlist tables as HTML when global DL mode is disabled (default)' do
+        described_class.bootstrap!(convert_dls_to_markdown: false)
+        markdown = convert_html_fragment(hdlist_html)
+        expect(markdown).to include('<table>')
+        expect(markdown).not_to include('**Term:**')
+      end
+
+      it 'respects .no-markdown on the hdlist wrapper to prevent conversion' do
+        described_class.bootstrap!(convert_dls_to_markdown: true)
+        markdown = convert_html_fragment(hdlist_html('hdlist no-markdown'))
+        expect(markdown).not_to include('**Term:**')
+        expect(markdown).to include('<table>')
+      end
+
+      it 'respects .to-markdown on the hdlist wrapper to force conversion' do
+        described_class.bootstrap!(convert_dls_to_markdown: false)
+        markdown = convert_html_fragment(hdlist_html('hdlist to-markdown'))
+        expect(markdown).to include('**Term:** Def')
+        expect(markdown).not_to include('<table>')
+      end
+
+      it 'does not affect ordinary tables (only tables inside div.hdlist)' do
+        described_class.bootstrap!(convert_dls_to_markdown: true, convert_tables_to_markdown: false)
+        html = '<table><tr><td>Term</td><td><p>Def</p></td></tr></table>'
+        markdown = convert_html_fragment(html)
+        expect(markdown).to include('<table>')
+        expect(markdown).not_to include('**Term:**')
       end
     end
   end

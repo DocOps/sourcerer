@@ -187,7 +187,7 @@ module Sourcerer
     class DtConverter < ReverseMarkdown::Converters::Base
       def convert node, state={}
         term_text = treat_children(node, state).strip
-        "*#{term_text}:*\n"
+        "**#{term_text}:**\n"
       end
     end
 
@@ -197,8 +197,10 @@ module Sourcerer
     class DdConverter < ReverseMarkdown::Converters::Base
       def convert node, state={}
         content = treat_children(node, state).strip
-        # Indent all lines of the definition by 3 spaces (works for both inline and block content)
-        indented = content.split("\n").map { |line| "   #{line}" }.join("\n")
+        # Indent non-blank lines of the definition by 3 spaces (works for both inline and
+        # block content); blank lines are left empty so they stay collapsible as paragraph
+        # breaks instead of becoming whitespace-only lines that pile up under nesting.
+        indented = content.split("\n").map { |line| line.strip.empty? ? '' : "   #{line}" }.join("\n")
         "#{indented}\n\n"
       end
     end
@@ -461,6 +463,12 @@ module Sourcerer
     # Tables with "to-markdown" class are converted via ReverseMarkdown instead.
     # Supports both html5 (class on <table>) and html5s (class on parent <div class="table-block">).
     # Per-table classes (.to-markdown, .no-markdown) override the global conversion mode.
+    #
+    # Horizontal dlists ([horizontal]) render as a classless <table> inside a
+    # <div class="hdlist">, not as a <dl>, so they're intercepted here rather than
+    # by DlPassthrough. They follow the DL conversion mode/overrides (not the table
+    # mode), converting each hdlist1/hdlist2 row to "**Term:** Description" instead
+    # of a Markdown table.
     class TablePassthrough < ReverseMarkdown::Converters::Base
       def initialize
         super
@@ -468,6 +476,8 @@ module Sourcerer
       end
 
       def convert node, state={}
+        return convert_hdlist(node, state) if hdlist_table?(node)
+
         global_mode = Thread.current[:sourcerer_table_conversion_mode] || false
 
         # Check for per-table classes (on table or parent wrapper)
@@ -498,6 +508,46 @@ module Sourcerer
       end
 
       private
+
+      def hdlist_table? node
+        parent = node.parent
+        parent && parent.name == 'div' && check_class_on_node(parent, 'hdlist')
+      end
+
+      def convert_hdlist node, state={}
+        global_mode = Thread.current[:sourcerer_dl_conversion_mode] || false
+
+        has_to_markdown = check_class_on_node(node, 'to-markdown')
+        has_no_markdown = check_class_on_node(node, 'no-markdown')
+
+        parent = node.parent
+        if parent && parent.name == 'div'
+          has_to_markdown ||= check_class_on_node(parent, 'to-markdown')
+          has_no_markdown ||= check_class_on_node(parent, 'no-markdown')
+        end
+
+        should_convert = if has_no_markdown
+                           false
+                         elsif has_to_markdown
+                           true
+                         else
+                           global_mode
+                         end
+
+        return "#{node.to_html}\n" unless should_convert
+
+        body = node.css('> tr').map { |row| convert_hdlist_row(row, state) }.join
+        "#{body}\n"
+      end
+
+      def convert_hdlist_row row, state={}
+        # Match by column position, not the hdlist1/hdlist2 classes: normalize_html_for_markdown
+        # (clean_html5s_tables!) strips class attributes from td/tr before this converter runs.
+        term_node, desc_node = row.css('> td')
+        term = term_node ? treat_children(term_node, state).strip : ''
+        desc = desc_node ? treat_children(desc_node, state).strip : ''
+        "**#{term}:** #{desc}\n"
+      end
 
       def check_class_on_node node, class_name
         node['class'].to_s.split.include?(class_name)
@@ -714,6 +764,7 @@ module Sourcerer
         markdown = markdown.gsub(/(\*\*[^\n]+\*\*  \n)\n+(?=\S)/, '\\1')
         markdown = markdown.gsub(/<figcaption>\s+/, '<figcaption>')
         markdown = markdown.gsub(%r{\s+</figcaption>}, '</figcaption>')
+        markdown = normalize_blank_lines(markdown)
 
         # Replace checkbox markers: handle indented list items and maintain correct dash placement
         replace_checkbox_markers(markdown)
@@ -721,6 +772,14 @@ module Sourcerer
         Thread.current[:sourcerer_table_conversion_mode] = nil
         Thread.current[:sourcerer_dl_conversion_mode] = nil
       end
+    end
+
+    # Collapse whitespace-only lines to truly blank ones, then collapse runs of
+    # 3+ consecutive newlines down to a single blank line (one \n\n). Nested
+    # definition lists and example blocks otherwise stack indentation and blank
+    # lines from each conversion level, producing long runs of whitespace-only lines.
+    def self.normalize_blank_lines markdown
+      markdown.gsub(/^[ \t]+$/, '').gsub(/\n{3,}/, "\n\n")
     end
 
     # Replace checkbox placeholder markers with proper Markdown checkbox syntax.
