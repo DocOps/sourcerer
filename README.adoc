@@ -847,6 +847,20 @@ Use `private_class_method` for singleton helper methods defined with `def self.*
 Use `private` for instance helper methods in classes or mixins.
 Avoid exporting helper methods as accidental public API.
 
+[[generated-docs]]
+=== Generated Reference Docs
+
+Some reference documentation is generated from data rather than hand-written, so it can't drift from what the code actually does.
+`specs/data/docs-manifest.yml` lists each generation job: a Liquid (or ERB) template, a YAML data source, an output path, and optional `vars` to parameterize a shared template into multiple outputs.
+
+For example, `specs/data/liquid-filters.yml` (the same source of truth used by the Liquid filter test suite; see <<tests>>) is rendered through `docs/templates/liquid-filters-ref.adoc.liquid` twice -- once grouped by filter category, once by filter source -- producing the partials committed at `lib/sourcerer/_docs/partials/liquid-filters-by-kind.adoc` and `liquid-filters-by-source.adoc`.
+These partials ship with the gem so downstream tools can `include::` them directly.
+
+Regenerate all manifest entries with:
+
+[.prompt]
+ bundle exec rake generate:docs
+
 [[tests]]
 === Tests
 
@@ -903,3 +917,5 @@ AsciiSourcerer does not yet publish a release history document.
 == Legal
 
 Sourcerer is licensed under the MIT License.
+
+A `BILL_OF_MATERIALS.adoc` file is available in the source repository and the gem package.

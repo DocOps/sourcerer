@@ -18,12 +18,17 @@ module Sourcerer
       Bootstrapper.load_plugins
       Monkeypatches.patch_jekyll
 
-      # Ensure Sourcerer filters are registered
-      ::Liquid::Template.register_filter(::Sourcerer::Jekyll::Liquid::Filters)
+      # Registration order matters: Liquid's Strainer `include`s each module in
+      # turn, so a later registration wins over an earlier one for any
+      # same-named filter method. Sourcerer's filters register LAST so that,
+      # e.g., its `inspect` (which adds a `format` argument) overrides
+      # Jekyll's `inspect` rather than being shadowed by it.
       # Ensure Jekyll filters are registered
       ::Liquid::Template.register_filter(::Jekyll::Filters)
       # Ensure jekyll-asciidoc filters are registered
       ::Liquid::Template.register_filter(::Jekyll::AsciiDoc::Filters)
+      # Ensure Sourcerer filters are registered (last, so they can override)
+      ::Liquid::Template.register_filter(::Sourcerer::Jekyll::Liquid::Filters)
       # Ensure Sourcerer tags are registered
       ::Liquid::Template.register_tag('embed', ::Sourcerer::Jekyll::Liquid::Tags::EmbedTag)
     end

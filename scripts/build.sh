@@ -55,11 +55,10 @@ fi
 current_version=$(ruby -r asciidoctor -e "doc = Asciidoctor.load_file('README.adoc', safe: :unsafe); puts doc.attributes['this_prod_vrsn']")
 echo -e "${GREEN}📋 Current version: $current_version${NC}"
 
-# Build gem
+# Build gem (the `build` rake task also regenerates lib/sourcerer/_docs/,
+# which ships in the gem but isn't hand-written/tracked in Git)
 echo -e "${YELLOW}🔨 Building gem...${NC}"
-mkdir -p pkg/
-gem build "$GEMSPEC_FILE"
-mv "${PROJECT_NAME}"-*.gem pkg/
+bundle exec rake build
 
 # Test built gem
 echo -e "${YELLOW}🧪 Testing built gem...${NC}"

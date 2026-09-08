@@ -13,6 +13,38 @@ end
 
 VERSION_LINE_REGEX = /^:this_prod_vrsn:\s+(.*)$/
 
+DOCS_MANIFEST_PATH = File.join(__dir__, 'specs/data/docs-manifest.yml')
+DOCS_MANIFEST_PATH_KEYS = %i[template data out attrs].freeze
+
+namespace :generate do
+  desc 'Generate reference docs from templates + data, per specs/data/docs-manifest.yml'
+  task :docs do
+    require_relative 'lib/sourcerer'
+
+    manifest = YAML.safe_load_file(DOCS_MANIFEST_PATH, permitted_classes: [Date, Time])
+    entries = manifest['docs'] || []
+
+    entries.each do |entry|
+      render_entry = entry.transform_keys(&:to_sym)
+      DOCS_MANIFEST_PATH_KEYS.each do |key|
+        next unless render_entry[key]
+
+        render_entry[key] = File.expand_path(render_entry[key], __dir__)
+      end
+
+      puts "Generating #{render_entry[:name] || render_entry[:out]} -> #{render_entry[:out]}"
+      Sourcerer::Rendering.render_outputs([render_entry])
+    end
+  end
+end
+
+# The lib/sourcerer/_docs/ is generated, thus git-ignored. This enhances
+# the build task defined by bundler/gem_tasks (rather than redefining it),
+# regenerates those docs immediately before the gem is built, so they're
+# present on disk and picked up by the gemspec's `Dir[]` glob by the
+# time `gem build` runs.
+task build: 'generate:docs'
+
 # Only require rspec when running spec tasks
 begin
   require 'rspec/core/rake_task'
