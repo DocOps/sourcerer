@@ -144,6 +144,7 @@ Before making any changes, **read these documents in order**:
 ### Core Components
 
 ```
+lib/asciidoctor/              # Direct Asciidoctor extensions
 lib/sourcerer.rb              # Core API entry point
 lib/sourcerer/builder.rb      # Prebuild generation
 lib/sourcerer/jekyll/         # Jekyll/Liquid integration
