@@ -26,7 +26,8 @@ Gem::Specification.new do |spec|
                    'README.adoc',
                    'LICENSE',
                    'BILL_OF_MATERIALS.adoc',
-                   'specs/docs/**/*.adoc'
+                   'specs/docs/**/*.adoc',
+                   'specs/data/liquid-filters.yml'
                   ]
   spec.require_paths = ['lib']
 
