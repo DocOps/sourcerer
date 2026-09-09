@@ -7,7 +7,7 @@ gemspec
 # Development dependencies
 # Note: rake, rubocop, and rubocop-rspec are provided by docopslab-dev
 group :development, :test do
-  gem 'docopslab-dev', path: '../lab/gems/docopslab-dev'
+  gem 'docopslab-dev'
   gem 'rspec', '~> 3.0'
 end
 
